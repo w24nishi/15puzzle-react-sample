@@ -4,7 +4,6 @@ import './index.css';
 
 function Square(props) {
   const classNames = ['square'];
-  if (props.isHighlighted) classNames.push('highlighted');
 
   return (
     <button className={classNames.join(' ')} onClick={props.onClick}>
@@ -14,23 +13,22 @@ function Square(props) {
 }
 
 class Board extends React.Component {
-  renderSquare(i) {
+  renderSquare(row, col, val) {
     return (
       <Square
-        key={i}
-        value={this.props.squares[i]}
-        isHighlighted={this.props.highlightTargets.includes(i)}
-        onClick={() => this.props.onClick(i)}
+        key={`${row}-${col}`}
+        value={val}
+        onClick={() => this.props.onClick(row, col)}
       />
     );
   }
 
   render() {
     return <div>{
-      [0, 1, 2].map(row => (
+      this.props.squares.map((rowVals, row)=> (
         <div key={row} className="board-row">{
-          [0, 1, 2].map(col => (
-            this.renderSquare(row * 3 + col)
+          rowVals.map((val, col) => (
+            this.renderSquare(row, col, val)
           ))
         }</div>
       ))
@@ -43,40 +41,60 @@ class Game extends React.Component {
     super(props);
     this.state = {
       history: [{
-        squares: Array(9).fill(null),
-        location: null,
+        squares: getRandomInitSquares(),
+        movedSquare: null,
       }],
       stepNumber: 0,
-      xIsNext: true,
       sortMovesAsc: true,
     };
   }
 
-  handleClick(i) {
+  handleClick(row, col) {
     const history = this.state.history.slice(0, this.state.stepNumber + 1);
     const current = history[history.length - 1];
-    const squares = current.squares.slice();
-    const [winner, _] = calculateWinner(squares)
-    if (winner || squares[i]) {
+    const squares = JSON.parse(JSON.stringify(current.squares));
+    if (isGameCompleted(squares)) {
       return;
     }
-    const col = i % 3;
-    const row = (i - col) / 3;
-    squares[i] = this.state.xIsNext? 'X': 'O';
+    const clickedVal = squares[row][col];
+    this.moveIfPossible(squares, row, col);
+    const hasMoved = (clickedVal !== squares[row][col]);
+    if (!hasMoved) {
+      return;
+    }
     this.setState({
       history: history.concat([{
         squares: squares,
-        location: `(${col}, ${row})`,
+        movedSquare: clickedVal,
       }]),
       stepNumber: history.length,
-      xIsNext: !this.state.xIsNext,
     });
+  }
+
+  moveIfPossible(squares, row, col) {
+    for (const rowDelta of [-1,1]) {
+      const neighborRow = row + rowDelta;
+      if (neighborRow < 0 || 3 < neighborRow) continue;
+      if (squares[neighborRow][col] === null) {
+        squares[neighborRow][col] = squares[row][col];
+        squares[row][col] = null;
+        return;
+      }
+    }
+    for (const colDelta of [-1,1]) {
+      const neighborCol = col + colDelta;
+      if (neighborCol < 0 || 3 < neighborCol) continue;
+      if (squares[row][neighborCol] === null) {
+        squares[row][neighborCol] = squares[row][col];
+        squares[row][col] = null;
+        return;
+      }
+    }
   }
 
   jumpTo(step) {
     this.setState({
       stepNumber: step,
-      xIsNext: (step % 2) === 0,
     });
   }
 
@@ -89,7 +107,7 @@ class Game extends React.Component {
   buildMovesList(history) {
     const moves = history.map((step, move) => {
       const descText = move ?
-        'Go to move #' + move + ' ' + step.location:
+        `Go to move #${move} (${step.movedSquare})`:
         'Go to game start';
       const desc = (this.state.stepNumber === move) ?
         <b>{descText}</b>:
@@ -105,22 +123,11 @@ class Game extends React.Component {
       moves.reverse();
   }
 
-  buildStatus(current, winner) {
-    if (winner) {
-      return 'Winner: ' + winner;
-    }
-    if (current.squares.every(s => s)) {
-      return 'Draw';
-    }
-    return 'Next player: ' + (this.state.xIsNext? 'X': 'O');
-  }
-
   render() {
     const history = this.state.history;
     const current = history[this.state.stepNumber];
-    const [winner, lines] = calculateWinner(current.squares);
 
-    const status = this.buildStatus(current, winner);
+    const status = isGameCompleted(current.squares)? 'Completed!!!': '';
     const moves = this.buildMovesList(history);
 
     return (
@@ -128,8 +135,7 @@ class Game extends React.Component {
         <div className="game-board">
           <Board
             squares={current.squares}
-            onClick={(i) => this.handleClick(i)}
-            highlightTargets={lines}
+            onClick={(row, col) => this.handleClick(row, col)}
           />
         </div>
         <div className="game-info">
@@ -149,22 +155,42 @@ ReactDOM.render(
   document.getElementById('root')
 );
 
-function calculateWinner(squares) {
-  const lines = [
-    [0, 1, 2],
-    [3, 4, 5],
-    [6, 7, 8],
-    [0, 3, 6],
-    [1, 4, 7],
-    [2, 5, 8],
-    [0, 4, 8],
-    [2, 4, 6],
+function isGameCompleted(squares) {
+  const rightPlaces = [
+    [1,2,3,4],
+    [5,6,7,8],
+    [9,10,11,12],
+    [13,14,15,null],
   ];
-  for (let i=0, len=lines.length; i<len; i++) {
-    const [a,b,c] = lines[i];
-    if (squares[a] && squares[a] === squares[b] && squares[a] === squares[c]) {
-      return [squares[a], [a,b,c]];
-    }
+  return JSON.stringify(rightPlaces) === JSON.stringify(squares);
+}
+
+function getRandomInitSquares(scrambles = 100) {
+  const squares = [
+    [1,2,3,4],
+    [5,6,7,8],
+    [9,10,11,12],
+    [13,14,15,null],
+  ];
+  let [nullRow, nullCol] = [3, 3];
+  const deltas = [[-1,0], [1,0], [0,-1], [0,1]];
+
+  let scrambleCount = 0;
+  const moveNull = ([rowDelta, colDelta]) => {
+    const neighborRow = nullRow + rowDelta;
+    const neighborCol = nullCol + colDelta;
+    if (neighborRow < 0 || 3 < neighborRow) return;
+    if (neighborCol < 0 || 3 < neighborCol) return;
+    squares[nullRow][nullCol] = squares[neighborRow][neighborCol];
+    squares[neighborRow][neighborCol] = null;
+    [nullRow, nullCol] = [neighborRow, neighborCol];
+    scrambleCount++;
   }
-  return [null, []];
+  const randomDelta = () => {
+    return deltas[Math.floor(Math.random() * deltas.length)];
+  };
+  while (scrambleCount < scrambles) {
+    moveNull(randomDelta());
+  }
+  return squares;
 }
