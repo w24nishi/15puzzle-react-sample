@@ -1,3 +1,10 @@
+15 Puzzle
+===
+
+Reactのチュートリアルが終わって、次にじゃあ適当に改造して何か作ろうと思ったら15パズルになりました。
+
+以下は元のREADME.
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
