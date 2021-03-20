@@ -56,12 +56,14 @@ class Game extends React.Component {
     if (isGameCompleted(squares)) {
       return;
     }
+
     const clickedVal = squares[row][col];
-    this.moveIfPossible(squares, row, col);
+    moveIfPossible(squares, row, col);
     const hasMoved = (clickedVal !== squares[row][col]);
     if (!hasMoved) {
       return;
     }
+
     this.setState({
       history: history.concat([{
         squares: squares,
@@ -71,25 +73,41 @@ class Game extends React.Component {
     });
   }
 
-  moveIfPossible(squares, row, col) {
-    for (const rowDelta of [-1,1]) {
-      const neighborRow = row + rowDelta;
-      if (neighborRow < 0 || 3 < neighborRow) continue;
-      if (squares[neighborRow][col] === null) {
-        squares[neighborRow][col] = squares[row][col];
-        squares[row][col] = null;
-        return;
-      }
+  handleKeyDown(event) {
+    event.preventDefault();
+    const deltas = {
+      ArrowUp: [-1, 0],
+      ArrowDown: [1, 0],
+      ArrowLeft: [0, -1],
+      ArrowRight: [0, 1],
     }
-    for (const colDelta of [-1,1]) {
-      const neighborCol = col + colDelta;
-      if (neighborCol < 0 || 3 < neighborCol) continue;
-      if (squares[row][neighborCol] === null) {
-        squares[row][neighborCol] = squares[row][col];
-        squares[row][col] = null;
-        return;
-      }
+    if (!Object.keys(deltas).includes(event.key)) return;
+    const [rowDelta, colDelta] = deltas[event.key];
+
+    const history = this.state.history.slice(0, this.state.stepNumber + 1);
+    const current = history[history.length - 1];
+    const squares = JSON.parse(JSON.stringify(current.squares));
+    if (isGameCompleted(squares)) {
+      return;
     }
+
+    const [nullRow, nullCol] = findNull(squares);
+    const neighborRow = nullRow - rowDelta;
+    const neighborCol = nullCol - colDelta;
+    if (neighborRow < 0 || 3 < neighborRow) return;
+    if (neighborCol < 0 || 3 < neighborCol) return;
+
+    squares[nullRow][nullCol] = squares[neighborRow][neighborCol];
+    squares[neighborRow][neighborCol] = null;
+    const movedVal = squares[nullRow][nullCol]
+
+    this.setState({
+      history: history.concat([{
+        squares: squares,
+        movedSquare: movedVal,
+      }]),
+      stepNumber: history.length,
+    });
   }
 
   jumpTo(step) {
@@ -131,7 +149,10 @@ class Game extends React.Component {
     const moves = this.buildMovesList(history);
 
     return (
-      <div className="game">
+      <div
+        className="game"
+        onKeyDown={e => this.handleKeyDown(e)}
+      >
         <div className="game-board">
           <Board
             squares={current.squares}
@@ -193,4 +214,37 @@ function getRandomInitSquares(scrambles = 100) {
     moveNull(randomDelta());
   }
   return squares;
+}
+
+function moveIfPossible(squares, row, col) {
+  if (row < 0 || 3 < row) return;
+  if (col < 0 || 3 < col) return;
+
+  for (const rowDelta of [-1,1]) {
+    const neighborRow = row + rowDelta;
+    if (neighborRow < 0 || 3 < neighborRow) continue;
+    if (squares[neighborRow][col] === null) {
+      squares[neighborRow][col] = squares[row][col];
+      squares[row][col] = null;
+      return;
+    }
+  }
+  for (const colDelta of [-1,1]) {
+    const neighborCol = col + colDelta;
+    if (neighborCol < 0 || 3 < neighborCol) continue;
+    if (squares[row][neighborCol] === null) {
+      squares[row][neighborCol] = squares[row][col];
+      squares[row][col] = null;
+      return;
+    }
+  }
+}
+
+function findNull(squares) {
+  for (const row of Array.from(squares, (v,i) => i)) {
+    for (const col of Array.from(squares[row], (v,i) => i)) {
+      if (squares[row][col] === null) return [row, col];
+    }
+  }
+  return [null, null];
 }
